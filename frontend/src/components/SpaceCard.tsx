@@ -1,8 +1,10 @@
 import React from 'react';
+import { useNavigate } from 'react-router-dom';
 import { MapPin, Users, Wifi, Coffee, Star } from 'lucide-react';
 import './SpaceCard.css';
 
 interface SpaceCardProps {
+    id?: string | number;
     title: string;
     location: string;
     type: string;
@@ -12,7 +14,8 @@ interface SpaceCardProps {
     imageUrl: string;
 }
 
-const SpaceCard: React.FC<SpaceCardProps> = ({ title, location, type, capacity, price, rating, imageUrl }) => {
+const SpaceCard: React.FC<SpaceCardProps> = ({ id, title, location, type, capacity, price, rating, imageUrl }) => {
+    const navigate = useNavigate();
     return (
         <div className="space-card glass-panel">
             <div className="card-image-wrap">
@@ -43,7 +46,7 @@ const SpaceCard: React.FC<SpaceCardProps> = ({ title, location, type, capacity, 
                     <div className="card-price">
                         <span className="price-val">JOD {price}</span> <span className="price-period">/ hour</span>
                     </div>
-                    <button className="btn-outline">Book Now</button>
+                    <button className="btn-outline" onClick={() => id ? navigate(`/space/${id}`) : null}>Book Now</button>
                 </div>
             </div>
         </div>

@@ -235,7 +235,10 @@ export const getMyBookings = async (req: Request, res: Response): Promise<void> 
         const bookings = await prisma.booking.findMany({
             where: { customerId: userId },
             include: {
-                branch: true
+                branch: true,
+                vendorService: {
+                    include: { service: true }
+                }
             },
             orderBy: { bookingDate: 'desc' }
         });
@@ -243,8 +246,13 @@ export const getMyBookings = async (req: Request, res: Response): Promise<void> 
         const formatted = bookings.map((b: any) => ({
             id: b.id,
             bookingNumber: b.bookingNumber,
+            branchId: b.branchId,
             branchName: b.branch?.name || '',
+            branch: b.branch,
+            service: b.vendorService?.service,
             startTime: b.startTime,
+            endTime: new Date(new Date(b.startTime).getTime() + b.duration * 3600000).toISOString(),
+            totalPrice: b.totalPrice,
             status: b.bookingStatus
         }));
 

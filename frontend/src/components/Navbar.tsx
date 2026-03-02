@@ -36,9 +36,9 @@ const Navbar: React.FC = () => {
 
                     {isAuthenticated ? (
                         <>
-                            <span style={{ color: 'var(--color-grey-200)', fontSize: '0.9rem', marginLeft: '8px' }}>
-                                {user?.fullName || user?.email?.split('@')[0] || 'User'}
-                            </span>
+                            <Link to="/dashboard" style={{ color: 'var(--color-primary)', fontSize: '0.95rem', marginLeft: '8px', textDecoration: 'none', fontWeight: '600' }} title="Go to Dashboard">
+                                Dashboard
+                            </Link>
                             <button className="icon-btn" aria-label="Logout" onClick={handleLogout} title="Logout">
                                 <LogOut size={20} />
                             </button>

@@ -8,6 +8,7 @@ interface Message {
     role: 'user' | 'assistant';
     content: string;
     timestamp: Date;
+    recommendedBranches?: any[];
 }
 
 const AIAssistant: React.FC = () => {
@@ -60,8 +61,9 @@ const AIAssistant: React.FC = () => {
             const assistantMessage: Message = {
                 id: (Date.now() + 1).toString(),
                 role: 'assistant',
-                content: response.data.response || 'I am sorry, I am having trouble connecting right now.',
-                timestamp: new Date()
+                content: response.data.agentMessage || 'I am sorry, I am having trouble connecting right now.',
+                timestamp: new Date(),
+                recommendedBranches: response.data.recommendedBranches
             };
 
             setMessages(prev => [...prev, assistantMessage]);
@@ -96,8 +98,24 @@ const AIAssistant: React.FC = () => {
                             <div className="message-avatar">
                                 {msg.role === 'assistant' ? <Bot size={20} /> : <User size={20} />}
                             </div>
-                            <div className="message-bubble">
-                                {msg.content}
+                            <div className="message-bubble" style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                <span>{msg.content}</span>
+                                {msg.recommendedBranches && msg.recommendedBranches.length > 0 && (
+                                    <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', marginTop: '12px' }}>
+                                        {msg.recommendedBranches.map((branch: any) => (
+                                            <div key={branch.id} style={{
+                                                background: 'rgba(255, 255, 255, 0.05)',
+                                                padding: '12px',
+                                                borderRadius: '8px',
+                                                border: '1px solid rgba(255, 91, 4, 0.3)',
+                                                minWidth: '200px'
+                                            }}>
+                                                <h4 style={{ margin: '0 0 4px 0', color: 'var(--color-primary)' }}>{branch.name}</h4>
+                                                <p style={{ margin: '0', fontSize: '0.85rem', color: 'var(--color-grey-200)' }}>📍 {branch.location}</p>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
                             </div>
                         </div>
                     ))}
