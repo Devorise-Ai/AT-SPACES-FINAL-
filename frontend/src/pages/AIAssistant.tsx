@@ -67,12 +67,12 @@ const AIAssistant: React.FC = () => {
             };
 
             setMessages(prev => [...prev, assistantMessage]);
-        } catch (error) {
+        } catch (error: any) {
             console.error('Chat error:', error);
             const errorMessage: Message = {
                 id: (Date.now() + 1).toString(),
                 role: 'assistant',
-                content: 'I encountered an error trying to process your request. Please try again.',
+                content: error?.response?.data?.error || 'I encountered an error trying to process your request. Please try again.',
                 timestamp: new Date()
             };
             setMessages(prev => [...prev, errorMessage]);

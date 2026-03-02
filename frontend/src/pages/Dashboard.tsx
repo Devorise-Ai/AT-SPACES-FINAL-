@@ -15,22 +15,23 @@ interface UserProfile {
 
 interface Booking {
     id: number;
-    branchId: number;
     startTime: string;
-    endTime: string;
-    totalPrice: number;
+    endTime?: string;
+    totalPrice?: number;
     status: string;
-    branch: {
-        name: string;
-        location: string;
+    bookingNumber?: string;
+    branchName?: string;
+    branch?: {
+        name?: string;
+        location?: string;
     };
-    service: {
-        name: string;
+    service?: {
+        name?: string;
     };
 }
 
 const Dashboard: React.FC = () => {
-    const { user, isAuthenticated } = useAuth();
+    const { isAuthenticated } = useAuth();
     const navigate = useNavigate();
 
     const [profile, setProfile] = useState<UserProfile | null>(null);
@@ -59,7 +60,20 @@ const Dashboard: React.FC = () => {
                 setProfile(profileRes.data);
                 setFullName(profileRes.data.fullName || `${profileRes.data.firstName || ''} ${profileRes.data.lastName || ''}`.trim());
                 setPhoneNumber(profileRes.data.phoneNumber || '');
-                setBookings(bookingsRes.data);
+                const normalizedBookings: Booking[] = Array.isArray(bookingsRes.data)
+                    ? bookingsRes.data.map((b: any) => ({
+                        id: b.id,
+                        startTime: b.startTime,
+                        endTime: b.endTime,
+                        totalPrice: b.totalPrice,
+                        status: b.status || b.bookingStatus || 'UNKNOWN',
+                        bookingNumber: b.bookingNumber,
+                        branchName: b.branchName,
+                        branch: b.branch,
+                        service: b.service
+                    }))
+                    : [];
+                setBookings(normalizedBookings);
             } catch (error) {
                 console.error("Error fetching dashboard data:", error);
             } finally {
@@ -131,8 +145,12 @@ const Dashboard: React.FC = () => {
         );
     }
 
-    const activeBookings = bookings.filter(b => b.status === 'CONFIRMED' || b.status === 'PENDING').sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime());
-    const pastBookings = bookings.filter(b => b.status === 'COMPLETED' || b.status === 'CANCELLED');
+    const activeStatuses = new Set(['UPCOMING', 'CONFIRMED', 'PENDING']);
+    const pastStatuses = new Set(['COMPLETED', 'CANCELLED']);
+    const activeBookings = bookings
+        .filter(b => activeStatuses.has((b.status || '').toUpperCase()))
+        .sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime());
+    const pastBookings = bookings.filter(b => pastStatuses.has((b.status || '').toUpperCase()));
 
     return (
         <div className="dashboard-page container section">
@@ -195,17 +213,18 @@ const Dashboard: React.FC = () => {
                                 {activeBookings.map(booking => (
                                     <div key={booking.id} className="booking-item glass-panel active">
                                         <div className="booking-info">
-                                            <h4>{booking.branch.name} - {booking.service.name}</h4>
-                                            <p className="booking-location"><MapPin size={14} /> {booking.branch.location}</p>
+                                            <h4>{booking.branch?.name || booking.branchName || `Booking #${booking.bookingNumber || booking.id}`} - {booking.service?.name || 'Workspace'}</h4>
+                                            <p className="booking-location"><MapPin size={14} /> {booking.branch?.location || 'Location unavailable'}</p>
                                             <div className="booking-time">
                                                 <CalendarIcon size={14} className="text-primary" />
                                                 <span>
-                                                    {new Date(booking.startTime).toLocaleDateString()} &middot; {new Date(booking.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} - {new Date(booking.endTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                                    {new Date(booking.startTime).toLocaleDateString()} &middot; {new Date(booking.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                                    {booking.endTime ? ` - ${new Date(booking.endTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : ''}
                                                 </span>
                                             </div>
                                         </div>
                                         <div className="booking-actions">
-                                            <div className="booking-status confirmed">Confirmed</div>
+                                            <div className="booking-status confirmed">{booking.status}</div>
                                             <button className="icon-btn" title="Download Calendar" onClick={() => handleDownloadICS(booking.id)}>
                                                 <Download size={20} />
                                             </button>
@@ -234,7 +253,7 @@ const Dashboard: React.FC = () => {
                                 {pastBookings.map(booking => (
                                     <div key={booking.id} className="booking-item glass-panel inactive">
                                         <div className="booking-info">
-                                            <h4>{booking.branch.name} - {booking.service.name}</h4>
+                                            <h4>{booking.branch?.name || booking.branchName || `Booking #${booking.bookingNumber || booking.id}`} - {booking.service?.name || 'Workspace'}</h4>
                                             <div className="booking-time">
                                                 <CalendarIcon size={14} />
                                                 <span>{new Date(booking.startTime).toLocaleDateString()}</span>
