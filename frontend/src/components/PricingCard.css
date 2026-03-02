@@ -1,0 +1,111 @@
+.pricing-card {
+    display: flex;
+    flex-direction: column;
+    padding: 40px 32px;
+    position: relative;
+    transition: transform var(--transition-normal);
+    height: 100%;
+    background: var(--color-grey-800);
+}
+
+.pricing-card:hover {
+    transform: translateY(-8px);
+}
+
+.pricing-card.popular {
+    border: 1px solid var(--color-primary);
+    background: linear-gradient(to bottom, rgba(255, 91, 4, 0.05), var(--color-grey-800));
+}
+
+.glow-border {
+    box-shadow: 0 0 30px rgba(255, 91, 4, 0.15) inset, 0 0 20px rgba(255, 91, 4, 0.2);
+}
+
+.popular-badge {
+    position: absolute;
+    top: -14px;
+    left: 50%;
+    transform: translateX(-50%);
+    background-color: var(--color-primary);
+    color: white;
+    font-weight: 900;
+    font-size: 0.8rem;
+    padding: 4px 16px;
+    border-radius: var(--radius-pill);
+    letter-spacing: 1px;
+    box-shadow: 0 4px 10px rgba(255, 91, 4, 0.3);
+}
+
+.pricing-header {
+    margin-bottom: 32px;
+}
+
+.tier-name {
+    color: var(--color-grey-50);
+    font-size: 1.25rem;
+    margin-bottom: 8px;
+}
+
+.plan-name {
+    font-size: 2.5rem;
+    font-weight: 900;
+    color: var(--color-grey-50);
+    margin-bottom: 16px;
+}
+
+.price-display {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    margin-bottom: 16px;
+}
+
+.currency {
+    font-weight: 700;
+    color: var(--color-grey-50);
+}
+
+.amount {
+    font-size: 4rem;
+    font-weight: 900;
+    color: var(--color-grey-50);
+    line-height: 1;
+}
+
+.period {
+    color: var(--color-grey-300);
+}
+
+.price-display.custom .amount {
+    font-size: 2.5rem;
+}
+
+.plan-subtitle {
+    color: var(--color-grey-200);
+    line-height: 1.5;
+}
+
+.pricing-features {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    margin-bottom: 40px;
+}
+
+.feature-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    color: var(--color-grey-100);
+}
+
+.check-icon {
+    color: var(--color-primary);
+    flex-shrink: 0;
+    margin-top: 2px;
+}
+
+.w-100 {
+    width: 100%;
+}

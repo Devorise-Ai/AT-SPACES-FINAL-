@@ -1,0 +1,267 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+model User {
+  id               Int               @id @default(autoincrement())
+  email            String?           @unique
+  phoneNumber      String?           @unique @map("phone_number")
+  passwordHash     String?           @map("password_hash")
+  role             String            @default("CUSTOMER")
+  status           String            @default("PENDING")
+  createdAt        DateTime          @default(now()) @map("created_at")
+  reviewedRequests ApprovalRequest[] @relation("AdminReviews")
+  approvalRequests ApprovalRequest[] @relation("VendorRequests")
+  bookings         Booking[]
+  branches         Branch[]
+  conversations    Conversation[]
+  otpSessions      OTPSession[]
+
+  @@index([role])
+  @@map("users")
+}
+
+model Branch {
+  id               Int               @id @default(autoincrement())
+  vendorId         Int               @map("vendor_id")
+  name             String
+  location         String
+  status           String            @default("UNDER_REVIEW")
+  occupancyRate    Float             @default(0) @map("occupancy_rate")
+  accessMapUrl     String?           @map("access_map_url")
+  createdAt        DateTime          @default(now()) @map("created_at")
+  approvalRequests ApprovalRequest[]
+  bookings         Booking[]
+  facilities       BranchFacility[]
+  vendor           User              @relation(fields: [vendorId], references: [id])
+  vendorServices   VendorService[]
+
+  @@index([vendorId])
+  @@map("branches")
+}
+
+model Service {
+  id               Int               @id @default(autoincrement())
+  name             String            @unique
+  createdAt        DateTime          @default(now()) @map("created_at")
+  approvalRequests ApprovalRequest[]
+  images           ServiceImage[]
+  vendorServices   VendorService[]
+
+  @@map("services")
+}
+
+model VendorService {
+  id                Int                  @id @default(autoincrement())
+  branchId          Int                  @map("branch_id")
+  serviceId         Int                  @map("service_id")
+  pricePerHour      Decimal?             @map("price_per_hour")
+  pricePerDay       Decimal?             @map("price_per_day")
+  pricePerWeek      Decimal?             @map("price_per_week")
+  pricePerMonth     Decimal?             @map("price_per_month")
+  capacity          Int                  @default(1)
+  availableCapacity Int                  @default(1) @map("available_capacity")
+  availability      Availability[]
+  bookings          Booking[]
+  features          ServiceFeature[]
+  images            VendorServiceImage[]
+  service           Service              @relation(fields: [serviceId], references: [id])
+  branch            Branch               @relation(fields: [branchId], references: [id])
+
+  @@unique([branchId, serviceId])
+  @@index([serviceId])
+  @@map("vendor_services")
+}
+
+model ServiceImage {
+  id        Int      @id @default(autoincrement())
+  serviceId Int      @map("service_id")
+  imageUrl  String   @map("image_url")
+  altText   String?  @map("alt_text")
+  isPrimary Boolean  @default(false) @map("is_primary")
+  sortOrder Int      @default(0) @map("sort_order")
+  createdAt DateTime @default(now()) @map("created_at")
+  service   Service  @relation(fields: [serviceId], references: [id])
+
+  @@index([serviceId])
+  @@map("service_images")
+}
+
+model VendorServiceImage {
+  id              Int           @id @default(autoincrement())
+  vendorServiceId Int           @map("vendor_service_id")
+  imageUrl        String        @map("image_url")
+  altText         String?       @map("alt_text")
+  isPrimary       Boolean       @default(false) @map("is_primary")
+  sortOrder       Int           @default(0) @map("sort_order")
+  createdAt       DateTime      @default(now()) @map("created_at")
+  vendorService   VendorService @relation(fields: [vendorServiceId], references: [id])
+
+  @@index([vendorServiceId])
+  @@map("vendor_service_images")
+}
+
+model Availability {
+  id              Int           @id @default(autoincrement())
+  vendorServiceId Int           @map("vendor_service_id")
+  date            DateTime
+  isAvailable     Boolean       @default(true) @map("is_available")
+  vendorService   VendorService @relation(fields: [vendorServiceId], references: [id])
+
+  @@index([vendorServiceId, date])
+  @@map("availability")
+}
+
+model Booking {
+  id              Int           @id @default(autoincrement())
+  bookingNumber   String        @unique @map("booking_number")
+  customerId      Int           @map("customer_id")
+  vendorServiceId Int           @map("vendor_service_id")
+  branchId        Int           @map("branch_id")
+  bookingDate     DateTime      @map("booking_date")
+  startTime       DateTime      @map("start_time")
+  duration        Int
+  numPeople       Int           @map("num_people")
+  totalPrice      Decimal       @map("total_price")
+  paymentMethod   String        @map("payment_method")
+  paymentStatus   String        @default("PENDING") @map("payment_status")
+  bookingStatus   String        @default("UPCOMING") @map("booking_status")
+  createdAt       DateTime      @default(now()) @map("created_at")
+  branch          Branch        @relation(fields: [branchId], references: [id])
+  vendorService   VendorService @relation(fields: [vendorServiceId], references: [id])
+  customer        User          @relation(fields: [customerId], references: [id])
+  payment         Payment?
+
+  @@index([customerId])
+  @@index([vendorServiceId])
+  @@index([bookingDate])
+  @@map("bookings")
+}
+
+model Payment {
+  id            Int      @id @default(autoincrement())
+  transactionId String   @unique @map("transaction_id")
+  bookingId     Int      @unique @map("booking_id")
+  amount        Decimal
+  status        String
+  createdAt     DateTime @default(now()) @map("created_at")
+  booking       Booking  @relation(fields: [bookingId], references: [id])
+
+  @@index([bookingId])
+  @@map("payments")
+}
+
+model ApprovalRequest {
+  id              Int      @id @default(autoincrement())
+  vendorId        Int      @map("vendor_id")
+  branchId        Int?     @map("branch_id")
+  serviceId       Int?     @map("service_id")
+  type            String
+  status          String   @default("PENDING")
+  rejectionReason String?  @map("rejection_reason")
+  reviewedBy      Int?     @map("reviewed_by")
+  createdAt       DateTime @default(now()) @map("created_at")
+  admin           User?    @relation("AdminReviews", fields: [reviewedBy], references: [id])
+  service         Service? @relation(fields: [serviceId], references: [id])
+  branch          Branch?  @relation(fields: [branchId], references: [id])
+  vendor          User     @relation("VendorRequests", fields: [vendorId], references: [id])
+
+  @@index([vendorId, status])
+  @@map("approval_requests")
+}
+
+model OTPSession {
+  id          Int      @id @default(autoincrement())
+  userId      Int?     @map("user_id")
+  phoneNumber String   @map("phone_number")
+  otpCode     String   @map("otp_code")
+  purpose     String
+  expiresAt   DateTime @map("expires_at")
+  isUsed      Boolean  @default(false) @map("is_used")
+  createdAt   DateTime @default(now()) @map("created_at")
+  user        User?    @relation(fields: [userId], references: [id])
+
+  @@index([phoneNumber, expiresAt])
+  @@map("otp_sessions")
+}
+
+model Facility {
+  id        Int              @id @default(autoincrement())
+  name      String           @unique
+  icon      String?
+  createdAt DateTime         @default(now()) @map("created_at")
+  branches  BranchFacility[]
+
+  @@map("facilities")
+}
+
+model BranchFacility {
+  id          Int      @id @default(autoincrement())
+  branchId    Int      @map("branch_id")
+  facilityId  Int      @map("facility_id")
+  isAvailable Boolean  @default(true) @map("is_available")
+  description String?
+  facility    Facility @relation(fields: [facilityId], references: [id])
+  branch      Branch   @relation(fields: [branchId], references: [id])
+
+  @@unique([branchId, facilityId])
+  @@index([branchId])
+  @@index([facilityId])
+  @@map("branch_facilities")
+}
+
+model Feature {
+  id        Int              @id @default(autoincrement())
+  name      String           @unique
+  icon      String?
+  createdAt DateTime         @default(now()) @map("created_at")
+  services  ServiceFeature[]
+
+  @@map("features")
+}
+
+model ServiceFeature {
+  id              Int           @id @default(autoincrement())
+  vendorServiceId Int           @map("vendor_service_id")
+  featureId       Int           @map("feature_id")
+  quantity        Int           @default(1)
+  feature         Feature       @relation(fields: [featureId], references: [id])
+  vendorService   VendorService @relation(fields: [vendorServiceId], references: [id])
+
+  @@unique([vendorServiceId, featureId])
+  @@index([vendorServiceId])
+  @@index([featureId])
+  @@map("service_features")
+}
+
+model Conversation {
+  id           Int       @id @default(autoincrement())
+  customerId   Int       @map("customer_id")
+  status       String    @default("ACTIVE")
+  messageCount Int       @default(0) @map("message_count")
+  summary      String?
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+  customer     User      @relation(fields: [customerId], references: [id])
+  messages     Message[]
+
+  @@index([customerId])
+  @@map("conversations")
+}
+
+model Message {
+  id             Int          @id @default(autoincrement())
+  conversationId Int          @map("conversation_id")
+  senderType     String       @map("sender_type")
+  messageText    String       @map("message_text")
+  createdAt      DateTime     @default(now()) @map("created_at")
+  conversation   Conversation @relation(fields: [conversationId], references: [id])
+
+  @@index([conversationId])
+  @@map("messages")
+}
