@@ -3,6 +3,7 @@ import { prisma } from '../utils/prisma';
 import bcrypt from 'bcryptjs';
 import { generateToken } from '../utils/jwt';
 import { validationResult } from 'express-validator';
+import crypto from 'crypto';
 
 // Mocks
 const verifyCaptcha = async (token: string) => true; // Mock
@@ -16,7 +17,7 @@ export const register = async (req: Request, res: Response): Promise<void> => {
             return;
         }
 
-        const { fullName, email, phoneNumber, password, role = 'CUSTOMER', captchaToken } = req.body;
+        const { fullName, email, phoneNumber, password, role = 'CUSTOMER', captchaToken, businessName, tradeLicenseNumber, branchAddress, ownerName } = req.body;
 
         if (!email && !phoneNumber) {
             res.status(400).json({ error: 'Either email or phone number is required' });
@@ -34,6 +35,14 @@ export const register = async (req: Request, res: Response): Promise<void> => {
         }
 
         const passwordHash = password ? await bcrypt.hash(password, 10) : undefined;
+        let registrationHash = undefined;
+
+        if (role === 'VENDOR') {
+            const payloadToHash = JSON.stringify({ email, phoneNumber, businessName, tradeLicenseNumber, ownerName, branchAddress });
+            registrationHash = crypto.createHmac('sha256', process.env.HMAC_SECRET || 'secret')
+                .update(payloadToHash)
+                .digest('hex');
+        }
 
         const queryCond = [];
         if (email) queryCond.push({ email });
@@ -54,7 +63,12 @@ export const register = async (req: Request, res: Response): Promise<void> => {
                 phoneNumber,
                 passwordHash,
                 role: role as any,
-                status: 'ACTIVE',
+                status: role === 'VENDOR' ? 'PENDING' : 'ACTIVE',
+                businessName,
+                tradeLicenseNumber,
+                branchAddress,
+                ownerName,
+                registrationHash
             }
         });
 
@@ -98,15 +112,41 @@ export const login = async (req: Request, res: Response): Promise<void> => {
         }
 
         if (email) {
-            const user = await prisma.user.findFirst({ where: { email } });
-            if (!user || !user.passwordHash) {
-                res.status(400).json({ error: 'Invalid credentials' });
+            const emailHash = crypto.createHash('sha256').update(email).digest('hex');
+
+            // Check lockout
+            const recentFailures = await prisma.securityEvent.count({
+                where: {
+                    userEmail: emailHash,
+                    eventType: 'FAILED_LOGIN',
+                    createdAt: { gte: new Date(Date.now() - 15 * 60000) } // Last 15 mins
+                }
+            });
+
+            if (recentFailures >= 5) {
+                res.status(403).json({ error: 'Account temporarily locked. Please try again later.' });
                 return;
             }
 
-            const isPasswordValid = await bcrypt.compare(password, user.passwordHash as string);
-            if (!isPasswordValid) {
-                res.status(400).json({ error: 'Invalid credentials' });
+            const user = await prisma.user.findFirst({ where: { email } });
+
+            // Generate dummy hash pre-calculated for 'dummy123' to prevent timing attacks
+            const dummyHash = '$2a$10$vI8aWBnX3f08j5eLz4p9qu0.G8u/p8H8H8H8H8H8H8H8H8H8H8H8H';
+            const isPasswordValid = user && user.passwordHash
+                ? await bcrypt.compare(password, user.passwordHash)
+                : await bcrypt.compare(password, dummyHash);
+
+            if (!user || !user.passwordHash || !isPasswordValid) {
+                await prisma.securityEvent.create({
+                    data: {
+                        userEmail: emailHash,
+                        ipAddress: req.ip || '0.0.0.0',
+                        userAgent: req.headers['user-agent'] || 'unknown',
+                        eventType: 'FAILED_LOGIN'
+                    }
+                });
+                // Generic error message for enumeration prevention
+                res.status(401).json({ error: 'Invalid credentials' });
                 return;
             }
 
@@ -116,7 +156,15 @@ export const login = async (req: Request, res: Response): Promise<void> => {
 
             const token = generateToken(user.id, user.role);
 
-            res.status(201).json({
+            // Set Secure/HttpOnly Cookie
+            res.cookie('token', token, {
+                httpOnly: true,
+                secure: process.env.NODE_ENV === 'production',
+                sameSite: 'strict',
+                maxAge: 8 * 60 * 60 * 1000 // 8 hours
+            });
+
+            res.status(200).json({
                 token,
                 user: { id: user.id, email: user.email, role: user.role, status: user.status }
             });
@@ -190,6 +238,14 @@ export const verifyOtp = async (req: Request, res: Response): Promise<void> => {
         }
 
         const token = generateToken(user.id, user.role);
+
+        res.cookie('token', token, {
+            httpOnly: true,
+            secure: process.env.NODE_ENV === 'production',
+            sameSite: 'strict',
+            maxAge: 8 * 60 * 60 * 1000 // 8 hours
+        });
+
         res.status(200).json({
             token,
             user: { id: user.id, phoneNumber: user.phoneNumber, role: user.role, status: user.status }
@@ -199,3 +255,12 @@ export const verifyOtp = async (req: Request, res: Response): Promise<void> => {
         res.status(500).json({ error: error.message });
     }
 }
+
+export const logout = async (req: Request, res: Response): Promise<void> => {
+    res.clearCookie('token', {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'strict'
+    });
+    res.status(200).json({ message: 'Logged out successfully' });
+};

@@ -1,0 +1,121 @@
+.sidebar {
+    width: 260px;
+    height: 100vh;
+    background-color: var(--grey-800);
+    border-right: var(--border-width) solid var(--border-color);
+    display: flex;
+    flex-direction: column;
+    padding: var(--space-xl) var(--space-md);
+    position: fixed;
+    left: 0;
+    top: 0;
+}
+
+.sidebar-brand {
+    display: flex;
+    align-items: center;
+    gap: var(--space-md);
+    padding: 0 var(--space-md);
+    margin-bottom: var(--space-2xl);
+}
+
+.brand-logo {
+    background: rgba(255, 91, 4, 0.1);
+    padding: var(--space-sm);
+    border-radius: var(--radius-md);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.brand-text h1 {
+    font-size: 1.25rem;
+    margin-bottom: -2px;
+}
+
+.brand-text span {
+    font-size: 0.65rem;
+    font-weight: 600;
+    color: var(--grey-300);
+    letter-spacing: 0.05em;
+}
+
+.sidebar-nav {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-sm);
+    flex: 1;
+}
+
+.nav-item {
+    display: flex;
+    align-items: center;
+    gap: var(--space-md);
+    padding: var(--space-md);
+    border-radius: var(--radius-lg);
+    color: var(--grey-200);
+    font-weight: 500;
+    transition: var(--transition);
+}
+
+.nav-item:hover {
+    background: rgba(255, 255, 255, 0.03);
+    color: #FFFFFF;
+}
+
+.nav-item.active {
+    background: linear-gradient(90deg, #FF5B04 0%, #FF8A4D 100%);
+    color: #FFFFFF;
+    box-shadow: 0 4px 20px rgba(255, 91, 4, 0.3);
+}
+
+.nav-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.sidebar-footer {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-sm);
+    padding-top: var(--space-xl);
+}
+
+.footer-item {
+    display: flex;
+    align-items: center;
+    gap: var(--space-md);
+    padding: var(--space-md);
+    border-radius: var(--radius-lg);
+    color: var(--grey-300);
+    font-weight: 500;
+    width: 100%;
+    position: relative;
+}
+
+.footer-item:hover {
+    background: rgba(255, 255, 255, 0.03);
+    color: #FFFFFF;
+}
+
+.notification-badge {
+    width: 8px;
+    height: 8px;
+    background-color: var(--primary);
+    border-radius: 50%;
+    position: absolute;
+    left: 32px;
+    top: 14px;
+    border: 2px solid var(--grey-800);
+}
+
+.sidebar-divider {
+    height: 1px;
+    background: var(--border-color);
+    margin: var(--space-md) 0;
+}
+
+.logout:hover {
+    color: var(--danger);
+}

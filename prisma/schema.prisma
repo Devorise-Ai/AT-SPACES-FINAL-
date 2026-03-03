@@ -8,19 +8,25 @@ datasource db {
 }
 
 model User {
-  id               Int               @id @default(autoincrement())
-  email            String?           @unique
-  phoneNumber      String?           @unique @map("phone_number")
-  passwordHash     String?           @map("password_hash")
-  role             String            @default("CUSTOMER")
-  status           String            @default("PENDING")
-  createdAt        DateTime          @default(now()) @map("created_at")
-  reviewedRequests ApprovalRequest[] @relation("AdminReviews")
-  approvalRequests ApprovalRequest[] @relation("VendorRequests")
-  bookings         Booking[]
-  branches         Branch[]
-  conversations    Conversation[]
-  otpSessions      OTPSession[]
+  id                 Int               @id @default(autoincrement())
+  email              String?           @unique
+  phoneNumber        String?           @unique @map("phone_number")
+  passwordHash       String?           @map("password_hash")
+  businessName       String?           @map("business_name")
+  tradeLicenseNumber String?           @map("trade_license_number")
+  branchAddress      String?           @map("branch_address")
+  ownerName          String?           @map("owner_name")
+  registrationHash   String?           @map("registration_hash")
+  role               String            @default("CUSTOMER")
+  status             String            @default("PENDING")
+  pendingEmail       String?           @map("pending_email")
+  createdAt          DateTime          @default(now()) @map("created_at")
+  reviewedRequests   ApprovalRequest[] @relation("AdminReviews")
+  approvalRequests   ApprovalRequest[] @relation("VendorRequests")
+  bookings           Booking[]
+  branches           Branch[]
+  conversations      Conversation[]
+  otpSessions        OTPSession[]
 
   @@index([role])
   @@map("users")
@@ -131,6 +137,7 @@ model Booking {
   paymentMethod   String        @map("payment_method")
   paymentStatus   String        @default("PENDING") @map("payment_status")
   bookingStatus   String        @default("UPCOMING") @map("booking_status")
+  checkInToken    String?       @map("check_in_token")
   createdAt       DateTime      @default(now()) @map("created_at")
   branch          Branch        @relation(fields: [branchId], references: [id])
   vendorService   VendorService @relation(fields: [vendorServiceId], references: [id])
@@ -163,6 +170,8 @@ model ApprovalRequest {
   serviceId       Int?     @map("service_id")
   type            String
   status          String   @default("PENDING")
+  payload         String?
+  payloadHash     String?  @map("payload_hash")
   rejectionReason String?  @map("rejection_reason")
   reviewedBy      Int?     @map("reviewed_by")
   createdAt       DateTime @default(now()) @map("created_at")
@@ -264,4 +273,42 @@ model Message {
 
   @@index([conversationId])
   @@map("messages")
+}
+
+model SecurityEvent {
+  id        Int      @id @default(autoincrement())
+  userEmail String?  @map("user_email")
+  ipAddress String   @map("ip_address")
+  userAgent String?  @map("user_agent")
+  eventType String   @map("event_type")
+  details   String?
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([userEmail, eventType, createdAt])
+  @@map("security_events")
+}
+
+model AuditLog {
+  id        Int      @id @default(autoincrement())
+  vendorId  Int      @map("vendor_id")
+  action    String
+  details   String
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([vendorId])
+  @@map("audit_logs")
+}
+
+model PriceChangeLog {
+  id              Int      @id @default(autoincrement())
+  vendorId        Int      @map("vendor_id")
+  vendorServiceId Int      @map("vendor_service_id")
+  previousPrice   String?  @map("previous_price")
+  newPrice        String?  @map("new_price")
+  reason          String?
+  approvedBy      Int?     @map("approved_by")
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  @@index([vendorServiceId])
+  @@map("price_change_logs")
 }

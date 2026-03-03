@@ -1,18 +1,22 @@
 import { PrismaClient } from '@prisma/client';
+import bcrypt from 'bcryptjs';
 
 const prisma = new PrismaClient();
 
 async function main() {
     console.log('Seeding the database...');
 
+    const vendorHash = await bcrypt.hash('vendor123', 10);
+    const customerHash = await bcrypt.hash('customer123', 10);
+
     // 1. Create Users (Vendor & Customer)
     const vendor = await prisma.user.upsert({
         where: { email: 'vendor@atspaces.com' },
-        update: {},
+        update: { passwordHash: vendorHash },
         create: {
             email: 'vendor@atspaces.com',
             phoneNumber: '+962777123456',
-            passwordHash: '$2a$10$xyz', // Dummy hash
+            passwordHash: vendorHash,
             role: 'VENDOR',
             status: 'ACTIVE',
         }
@@ -20,11 +24,11 @@ async function main() {
 
     const customer = await prisma.user.upsert({
         where: { email: 'customer@test.com' },
-        update: {},
+        update: { passwordHash: customerHash },
         create: {
             email: 'customer@test.com',
             phoneNumber: '+962788123456',
-            passwordHash: '$2a$10$xyz', // Dummy hash
+            passwordHash: customerHash,
             role: 'CUSTOMER',
             status: 'ACTIVE',
         }

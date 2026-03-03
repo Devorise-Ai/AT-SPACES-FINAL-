@@ -7,6 +7,7 @@ import userRoutes from './routes/user.routes';
 import branchRoutes from './routes/branch.routes';
 import bookingRoutes from './routes/booking.routes';
 import chatRoutes from './routes/chat.routes';
+import vendorRoutes from './routes/vendor.routes';
 
 const app = express();
 
@@ -26,6 +27,7 @@ app.use('/api/branches', branchRoutes);
 app.use('/api/bookings', bookingRoutes);
 app.use('/api/availability', bookingRoutes); // Mapping availability logic inside booking routes
 app.use('/api/chat', chatRoutes);
+app.use('/api/vendor', vendorRoutes);
 
 // Health Check
 app.get('/api/health', (req, res) => {

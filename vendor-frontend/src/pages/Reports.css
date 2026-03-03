@@ -1,0 +1,127 @@
+.reports-page {
+    animation: fadeIn 0.4s ease-out;
+}
+
+.kpi-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: var(--spacing-lg);
+    margin-bottom: var(--spacing-xl);
+}
+
+.kpi-card {
+    padding: var(--spacing-lg);
+    border-radius: var(--radius-lg);
+}
+
+.kpi-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: var(--spacing-md);
+}
+
+.kpi-icon {
+    width: 40px;
+    height: 40px;
+    background: rgba(255, 91, 4, 0.1);
+    color: var(--primary);
+    border-radius: var(--radius-md);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.kpi-change {
+    font-size: 0.75rem;
+    font-weight: 600;
+    padding: 2px 8px;
+    border-radius: 4px;
+}
+
+.kpi-change.up {
+    color: #10B981;
+    background: rgba(16, 185, 129, 0.1);
+}
+
+.kpi-change.down {
+    color: #EF4444;
+    background: rgba(239, 68, 68, 0.1);
+}
+
+.kpi-value {
+    font-size: 1.8rem;
+    font-weight: 700;
+    margin-bottom: 4px;
+}
+
+.kpi-label {
+    color: var(--grey-400);
+    font-size: 0.875rem;
+}
+
+/* Charts */
+.charts-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: var(--spacing-lg);
+}
+
+.chart-container {
+    padding: var(--spacing-lg);
+    border-radius: var(--radius-lg);
+}
+
+.chart-container h3 {
+    font-size: 1.1rem;
+    margin-bottom: var(--spacing-xl);
+    color: var(--grey-200);
+}
+
+.chart-wrapper {
+    margin-top: var(--spacing-md);
+}
+
+.export-btn,
+.date-range {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 0.6rem 1rem;
+    border-radius: var(--radius-md);
+    font-size: 0.875rem;
+    color: var(--grey-200);
+    border: 1px solid var(--grey-800);
+    background: rgba(255, 255, 255, 0.03);
+}
+
+@media (max-width: 1024px) {
+    .charts-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+/* Loading State */
+.dashboard-loading {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 60vh;
+    gap: var(--spacing-md);
+    color: var(--grey-400);
+}
+
+.spinner {
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    from {
+        transform: rotate(0deg);
+    }
+
+    to {
+        transform: rotate(360deg);
+    }
+}
