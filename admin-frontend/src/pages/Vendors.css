@@ -1,0 +1,13 @@
+.vendors-page .vendor-meta {
+    margin: var(--space-lg) 0;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-sm);
+    font-size: 0.85rem;
+    color: var(--grey-300);
+}
+
+.vendor-meta strong {
+    color: white;
+    margin-left: 4px;
+}

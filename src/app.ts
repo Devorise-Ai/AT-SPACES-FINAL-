@@ -8,6 +8,7 @@ import branchRoutes from './routes/branch.routes';
 import bookingRoutes from './routes/booking.routes';
 import chatRoutes from './routes/chat.routes';
 import vendorRoutes from './routes/vendor.routes';
+import adminRoutes from './routes/admin.routes';
 
 const app = express();
 
@@ -28,6 +29,7 @@ app.use('/api/bookings', bookingRoutes);
 app.use('/api/availability', bookingRoutes); // Mapping availability logic inside booking routes
 app.use('/api/chat', chatRoutes);
 app.use('/api/vendor', vendorRoutes);
+app.use('/api/admin', adminRoutes);
 
 // Health Check
 app.get('/api/health', (req, res) => {

@@ -1,0 +1,16 @@
+.main-layout {
+    display: flex;
+    min-height: 100vh;
+}
+
+.content-area {
+    flex: 1;
+    margin-left: var(--sidebar-width);
+    min-height: 100vh;
+    transition: margin-left 0.3s ease;
+}
+
+.content-container {
+    padding: var(--space-xl) var(--space-xl) var(--space-2xl);
+    max-width: 1400px;
+}
