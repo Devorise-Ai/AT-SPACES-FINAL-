@@ -131,11 +131,30 @@ export const login = async (req: Request, res: Response): Promise<void> => {
                 if (user) {
                     const newFails = user.failedLoginAttempts + 1;
                     if (newFails >= 5) {
+                        let lockMinutes = 5;
+                        if (newFails >= 20) {
+                            lockMinutes = 60;
+                        } else if (newFails >= 10) {
+                            lockMinutes = 30;
+                        } else if (newFails >= 7) {
+                            lockMinutes = 15;
+                        }
+
                         await prisma.user.update({
                             where: { id: user.id },
-                            data: { failedLoginAttempts: 0, lockedUntil: new Date(Date.now() + 15 * 60000) }
+                            data: {
+                                failedLoginAttempts: newFails,
+                                lockedUntil: new Date(Date.now() + lockMinutes * 60000)
+                            }
                         });
-                        await sendEmail(user.email, 'Security Alert: Account Locked', 'Your account has been locked due to 5 failed login attempts. It will be unlocked in 15 minutes.', '');
+                        if (user.email) {
+                            await sendEmail(
+                                user.email,
+                                'Security Alert: Account Locked',
+                                `Your account has been temporarily locked due to repeated failed login attempts. It will be unlocked in ${lockMinutes} minutes.`,
+                                ''
+                            );
+                        }
                     } else {
                         await prisma.user.update({
                             where: { id: user.id },

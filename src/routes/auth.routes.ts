@@ -6,13 +6,35 @@ import helmet from 'helmet';
 
 const router = Router();
 
-// [M-03] Vendor login protection (lockout, rate limit)
-const loginLimiter = rateLimit({
-    windowMs: 15 * 60 * 1000, // 15 minutes
-    max: 5, // Limit each IP to 5 login requests per `window`
-    message: { error: 'Too many login attempts from this IP, please try again after 15 minutes' },
+// Login protection policy (applies to CUSTOMER, VENDOR, ADMIN logins)
+// 1) Allow 5 attempts per minute (burst protection)
+const loginBurstLimiter = rateLimit({
+    windowMs: 60 * 1000, // 1 minute
+    max: 5,
+    message: { error: 'Too many login attempts. Please wait 1 minute before trying again.' },
     standardHeaders: true,
     legacyHeaders: false,
+    skipSuccessfulRequests: true,
+});
+
+// 2) Escalation block for repeated failures
+const loginEscalationLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: 10,
+    message: { error: 'Too many failed logins. Your IP is temporarily blocked for 15 minutes.' },
+    standardHeaders: true,
+    legacyHeaders: false,
+    skipSuccessfulRequests: true,
+});
+
+// 3) Hard block: 20+ failed attempts in 1 hour
+const loginHourlyBlockLimiter = rateLimit({
+    windowMs: 60 * 60 * 1000, // 1 hour
+    max: 20,
+    message: { error: 'Too many failed login attempts. Your IP is blocked for 1 hour.' },
+    standardHeaders: true,
+    legacyHeaders: false,
+    skipSuccessfulRequests: true,
 });
 
 // [M-01] Strong registration requirements (rate limit)
@@ -61,7 +83,7 @@ router.post('/register', signupLimiter, validateRegister, register);
  *     summary: Log in to an existing account
  *     tags: [Authentication]
  */
-router.post('/login', loginLimiter, validateLogin, login);
+router.post('/login', loginBurstLimiter, loginEscalationLimiter, loginHourlyBlockLimiter, validateLogin, login);
 
 /**
  * @swagger
@@ -70,7 +92,7 @@ router.post('/login', loginLimiter, validateLogin, login);
  *     summary: Complete login with preAuthToken and TOTP code
  *     tags: [Authentication]
  */
-router.post('/verify-mfa', loginLimiter, verifyMfa);
+router.post('/verify-mfa', loginBurstLimiter, loginEscalationLimiter, loginHourlyBlockLimiter, verifyMfa);
 
 /**
  * @swagger
@@ -88,7 +110,7 @@ router.post('/logout', logout);
  *     summary: Verify OTP code
  *     tags: [Authentication]
  */
-router.post('/verify-otp', loginLimiter, [
+router.post('/verify-otp', loginBurstLimiter, loginEscalationLimiter, loginHourlyBlockLimiter, [
     body('phoneNumber').isMobilePhone('any'),
     body('otpCode').isLength({ min: 4, max: 6 }).isNumeric()
 ], verifyOtp);
