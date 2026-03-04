@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { register, login, verifyOtp, logout } from '../controllers/auth.controller';
+import { register, login, verifyOtp, logout, requestPasswordReset, resetPassword, verifyMfa } from '../controllers/auth.controller';
 import rateLimit from 'express-rate-limit';
 import { body } from 'express-validator';
 import helmet from 'helmet';
@@ -65,6 +65,15 @@ router.post('/login', loginLimiter, validateLogin, login);
 
 /**
  * @swagger
+ * /api/auth/verify-mfa:
+ *   post:
+ *     summary: Complete login with preAuthToken and TOTP code
+ *     tags: [Authentication]
+ */
+router.post('/verify-mfa', loginLimiter, verifyMfa);
+
+/**
+ * @swagger
  * /api/auth/logout:
  *   post:
  *     summary: Log out out a user
@@ -83,5 +92,31 @@ router.post('/verify-otp', loginLimiter, [
     body('phoneNumber').isMobilePhone('any'),
     body('otpCode').isLength({ min: 4, max: 6 }).isNumeric()
 ], verifyOtp);
+
+const resetLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: 3, // Limit each IP to 3 requests
+    message: { error: 'Too many password reset requests from this IP' },
+    standardHeaders: true,
+    legacyHeaders: false,
+});
+
+/**
+ * @swagger
+ * /api/auth/request-reset:
+ *   post:
+ *     summary: Request a password reset link
+ *     tags: [Authentication]
+ */
+router.post('/request-reset', resetLimiter, requestPasswordReset);
+
+/**
+ * @swagger
+ * /api/auth/reset-password:
+ *   post:
+ *     summary: Reset password using the emailed token
+ *     tags: [Authentication]
+ */
+router.post('/reset-password', resetLimiter, resetPassword);
 
 export default router;

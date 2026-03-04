@@ -1,5 +1,7 @@
 import { Request, Response } from 'express';
 import { prisma } from '../utils/prisma';
+import { getAuditLogs, writeAuditLog } from '../utils/audit.logger';
+import { sendEmail } from '../utils/email.service';
 import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
 
@@ -101,6 +103,13 @@ export const getBranches = async (req: Request, res: Response): Promise<void> =>
 
 export const getBranchDetails = async (req: Request, res: Response): Promise<void> => {
     try {
+        const userRole = (req as any).user.role;
+        // M-05: Enforce admin role explicitly
+        if (userRole !== 'ADMIN' && userRole !== 'SUPER_ADMIN') {
+            res.status(403).json({ error: 'Access denied: Admin role required' });
+            return;
+        }
+
         const id = parseInt(req.params.id as string);
 
         const branch = await prisma.branch.findUnique({
@@ -158,6 +167,13 @@ export const updateBranchStatus = async (req: Request, res: Response): Promise<v
         const id = parseInt(req.params.id as string);
         const { status } = req.body;
         const adminId = (req as any).user.id;
+        const adminRole = (req as any).user.role;
+
+        // M-04: Assert admin role
+        if (adminRole !== 'ADMIN' && adminRole !== 'SUPER_ADMIN') {
+            res.status(403).json({ error: 'Access denied: Admin role required to change branch state' });
+            return;
+        }
 
         const validStatuses = ['ACTIVE', 'SUSPENDED', 'UNDER_REVIEW'];
         if (!validStatuses.includes(status)) {
@@ -176,12 +192,16 @@ export const updateBranchStatus = async (req: Request, res: Response): Promise<v
             data: { status }
         });
 
-        await prisma.auditLog.create({
-            data: {
-                vendorId: branch.vendorId,
-                action: `BRANCH_STATUS_${status}`,
-                details: `Admin ${adminId} changed branch ${branch.name} (ID: ${branch.id}) status to ${status}`
-            }
+        // M-04: Log to immutable AuditLog via helper
+        await writeAuditLog({
+            actorId: adminId,
+            actorRole: adminRole,
+            action: `BRANCH_STATUS_${status}`,
+            targetType: 'BRANCH',
+            targetId: branch.id,
+            oldValue: { status: branch.status },
+            newValue: { status },
+            ipAddress: req.ip || 'unknown'
         });
 
         res.status(200).json(updated);
@@ -295,6 +315,21 @@ export const updateVendorStatus = async (req: Request, res: Response): Promise<v
         const id = parseInt(req.params.id as string);
         const { status } = req.body;
         const adminId = (req as any).user.id;
+        const adminRole = (req as any).user.role;
+
+        // M-06: Prevent Self-Approval
+        if (adminId === id) {
+            await writeAuditLog({
+                actorId: adminId,
+                actorRole: adminRole,
+                action: 'SELF_APPROVAL_ATTEMPT',
+                targetType: 'USER',
+                targetId: id,
+                ipAddress: req.ip || 'unknown'
+            });
+            res.status(403).json({ error: 'Admins cannot approve or suspend their own vendor accounts' });
+            return;
+        }
 
         const validStatuses = ['ACTIVE', 'SUSPENDED', 'PENDING'];
         if (!validStatuses.includes(status)) {
@@ -316,12 +351,15 @@ export const updateVendorStatus = async (req: Request, res: Response): Promise<v
             data: { status }
         });
 
-        await prisma.auditLog.create({
-            data: {
-                vendorId: id,
-                action: `VENDOR_STATUS_${status}`,
-                details: `Admin ${adminId} changed vendor ${vendor.businessName || vendor.email} status to ${status}`
-            }
+        await writeAuditLog({
+            actorId: adminId,
+            actorRole: adminRole,
+            action: `VENDOR_STATUS_${status}`,
+            targetType: 'USER',
+            targetId: id,
+            oldValue: { status: vendor.status },
+            newValue: { status },
+            ipAddress: req.ip || 'unknown'
         });
 
         // If activating a vendor, also activate their branches under review
@@ -477,8 +515,8 @@ export const handleApprovalRequest = async (req: Request, res: Response): Promis
             return;
         }
 
-        if (decision === 'REJECTED' && !rejectionReason) {
-            res.status(400).json({ error: 'Rejection reason is required when rejecting a request' });
+        if (decision === 'REJECTED' && (!rejectionReason || rejectionReason.trim().length < 10)) {
+            res.status(400).json({ error: 'Rejection reason must be at least 10 characters long when rejecting' });
             return;
         }
 
@@ -732,19 +770,29 @@ export const exportAnalyticsReport = async (req: Request, res: Response): Promis
         const adminId = (req as any).user.id;
 
         const validFormats = ['csv', 'pdf', 'xlsx'];
+        const validTypes = ['full', 'occupancy', 'revenue', 'vendor'];
         if (!validFormats.includes(format)) {
             res.status(400).json({ error: `Invalid format. Must be one of: ${validFormats.join(', ')}` });
             return;
         }
+        if (!validTypes.includes(type)) {
+            res.status(400).json({ error: `Invalid type. Must be one of: ${validTypes.join(', ')}` });
+            return;
+        }
 
-        const exportUrl = `https://mock-s3-bucket.s3.amazonaws.com/exports/admin_${type}_report_${Date.now()}.${format}`;
+        const adminRole = (req as any).user.role;
+        const expiresStr = Math.floor((Date.now() + 5 * 60 * 1000) / 1000).toString(); // 5 min TTL
+        const mockSignature = crypto.createHmac('sha256', process.env.HMAC_SECRET || 'secret').update(`s3_policy_${expiresStr}`).digest('hex');
+        const exportUrl = `https://mock-s3-bucket.s3.amazonaws.com/exports/admin_${type}_report_${Date.now()}.${format}?X-Amz-Expires=${expiresStr}&X-Amz-Signature=${mockSignature}`;
 
-        await prisma.auditLog.create({
-            data: {
-                vendorId: adminId,
-                action: 'ADMIN_REPORT_EXPORTED',
-                details: `Admin exported ${type} report in ${format} format`
-            }
+        await writeAuditLog({
+            actorId: adminId,
+            actorRole: adminRole,
+            action: 'ADMIN_REPORT_EXPORTED',
+            targetType: 'SYSTEM',
+            targetId: 0,
+            ipAddress: req.ip || 'unknown',
+            newValue: `Admin exported ${type} report in ${format} format`
         });
 
         res.status(200).json({
@@ -791,10 +839,26 @@ export const getAdminProfile = async (req: Request, res: Response): Promise<void
 export const updateAdminProfile = async (req: Request, res: Response): Promise<void> => {
     try {
         const adminId = (req as any).user.id;
+        const adminRole = (req as any).user.role;
+        const targetId = parseInt(req.params.id as string);
         const { email, phoneNumber, ownerName } = req.body;
 
+        // M-08: Profile IDOR Prevention
+        if (adminId !== targetId && adminRole !== 'SUPER_ADMIN') {
+            await writeAuditLog({
+                actorId: adminId,
+                actorRole: adminRole,
+                action: 'IDOR_PROFILE_EDIT_ATTEMPT',
+                targetType: 'USER',
+                targetId: targetId,
+                ipAddress: req.ip || 'unknown'
+            });
+            res.status(403).json({ error: 'You can only edit your own profile' });
+            return;
+        }
+
         const updated = await prisma.user.update({
-            where: { id: adminId },
+            where: { id: targetId },
             data: { email, phoneNumber, ownerName }
         });
 
@@ -807,6 +871,79 @@ export const updateAdminProfile = async (req: Request, res: Response): Promise<v
                 ownerName: updated.ownerName
             }
         });
+    } catch (error: any) {
+        res.status(500).json({ error: error.message });
+    }
+};
+
+export const updateAdminPermissions = async (req: Request, res: Response): Promise<void> => {
+    try {
+        const id = parseInt(req.params.id as string);
+        const { permissions } = req.body; // expected to be a role string like 'ADMIN' or 'SUPER_ADMIN'
+        const adminId = (req as any).user.id;
+        const adminRole = (req as any).user.role;
+
+        // M-07: Require SUPER_ADMIN
+        if (adminRole !== 'SUPER_ADMIN') {
+            await writeAuditLog({
+                actorId: adminId,
+                actorRole: adminRole,
+                action: 'UNAUTHORIZED_PERMISSION_CHANGE',
+                targetType: 'USER',
+                targetId: id,
+                ipAddress: req.ip || 'unknown'
+            });
+            res.status(403).json({ error: 'Only super admins can change permissions' });
+            return;
+        }
+
+        // M-07: Block self-modifications
+        if (adminId === id) {
+            await writeAuditLog({
+                actorId: adminId,
+                actorRole: adminRole,
+                action: 'SELF_PERMISSION_ESCALATION_ATTEMPT',
+                targetType: 'USER',
+                targetId: id,
+                ipAddress: req.ip || 'unknown'
+            });
+            res.status(403).json({ error: 'Super admins cannot change their own permissions' });
+            return;
+        }
+
+        const targetAdmin = await prisma.user.findUnique({ where: { id } });
+        if (!targetAdmin) {
+            res.status(404).json({ error: 'Target admin not found' });
+            return;
+        }
+
+        const updated = await prisma.user.update({
+            where: { id },
+            data: { role: permissions }
+        });
+
+        // M-07: Mock email alert
+        if (targetAdmin.email) {
+            await sendEmail(
+                targetAdmin.email,
+                'Permissions Updated',
+                `Your permissions have been updated to ${permissions}`,
+                `<p>Your admin role has been updated to <strong>${permissions}</strong>.</p>`
+            );
+        }
+
+        await writeAuditLog({
+            actorId: adminId,
+            actorRole: adminRole,
+            action: 'UPDATE_PERMISSIONS',
+            targetType: 'USER',
+            targetId: id,
+            oldValue: { role: targetAdmin.role },
+            newValue: { role: permissions },
+            ipAddress: req.ip || 'unknown'
+        });
+
+        res.status(200).json({ message: 'Permissions updated successfully', newRole: permissions });
     } catch (error: any) {
         res.status(500).json({ error: error.message });
     }
@@ -860,6 +997,20 @@ export const getSecurityLogs = async (req: Request, res: Response): Promise<void
             take
         });
 
+        res.status(200).json(logs);
+    } catch (error: any) {
+        res.status(500).json({ error: error.message });
+    }
+};
+
+export const getAuditLogsHandler = async (req: Request, res: Response): Promise<void> => {
+    try {
+        const page = parseInt(req.query.page as string) || 1;
+        const limit = parseInt(req.query.limit as string) || 50;
+        const startDate = req.query.startDate ? new Date(req.query.startDate as string) : undefined;
+        const endDate = req.query.endDate ? new Date(req.query.endDate as string) : undefined;
+
+        const logs = await getAuditLogs(page, limit, startDate, endDate);
         res.status(200).json(logs);
     } catch (error: any) {
         res.status(500).json({ error: error.message });

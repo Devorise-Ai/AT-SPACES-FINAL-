@@ -35,7 +35,15 @@ router.use(authorize(['ADMIN']));
  *       403:
  *         description: Forbidden - Admin role required
  */
-router.get('/overview', adminController.getDashboardOverview);
+const noCache = (req: any, res: any, next: any) => {
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
+    res.setHeader('Surrogate-Control', 'no-store');
+    next();
+};
+
+router.get('/overview', noCache, adminController.getDashboardOverview);
 
 // ===========================
 // 2. BRANCH MANAGEMENT
@@ -385,11 +393,19 @@ router.get('/reports/export', adminController.exportAnalyticsReport);
  *     responses:
  *       200:
  *         description: Admin profile details
+ * @swagger
+ * /api/admin/profile/{id}:
  *   put:
- *     summary: Update admin profile
+ *     summary: Update admin profile (M-08 IDOR Check)
  *     tags: [Admin]
  *     security:
  *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
  *     requestBody:
  *       required: true
  *       content:
@@ -408,7 +424,36 @@ router.get('/reports/export', adminController.exportAnalyticsReport);
  *         description: Profile updated
  */
 router.get('/profile', adminController.getAdminProfile);
-router.put('/profile', adminController.updateAdminProfile);
+router.put('/profile/:id', adminController.updateAdminProfile);
+
+/**
+ * @swagger
+ * /api/admin/permissions/{id}:
+ *   patch:
+ *     summary: Update admin permissions (M-07 Escalation Block)
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               permissions:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Permissions updated
+ */
+router.patch('/permissions/:id', adminController.updateAdminPermissions);
 
 /**
  * @swagger
@@ -456,5 +501,32 @@ router.patch('/profile/password', adminController.updateAdminPassword);
  *         description: List of security events
  */
 router.get('/security/logs', adminController.getSecurityLogs);
+
+/**
+ * @swagger
+ * /api/admin/audit-log:
+ *   get:
+ *     summary: View immutable audit logs
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *           default: 1
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           default: 50
+ *     responses:
+ *       200:
+ *         description: Paginated list of audit logs
+ *       403:
+ *         description: Forbidden - requires super_admin
+ */
+router.get('/audit-log', authorize(['super_admin']), adminController.getAuditLogsHandler);
 
 export default router;

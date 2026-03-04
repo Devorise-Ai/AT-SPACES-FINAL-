@@ -20,6 +20,11 @@ model User {
   role               String            @default("CUSTOMER")
   status             String            @default("PENDING")
   pendingEmail       String?           @map("pending_email")
+  mfaSecret          String?           @map("mfa_secret")
+  mfaEnabled         Boolean           @default(false) @map("mfa_enabled")
+  mfaBackupCodes     String?           @map("mfa_backup_codes")
+  failedLoginAttempts Int              @default(0) @map("failed_login_attempts")
+  lockedUntil        DateTime?         @map("locked_until")
   createdAt          DateTime          @default(now()) @map("created_at")
   reviewedRequests   ApprovalRequest[] @relation("AdminReviews")
   approvalRequests   ApprovalRequest[] @relation("VendorRequests")
@@ -173,6 +178,7 @@ model ApprovalRequest {
   payload         String?
   payloadHash     String?  @map("payload_hash")
   rejectionReason String?  @map("rejection_reason")
+  notificationStatus String? @map("notification_status")
   reviewedBy      Int?     @map("reviewed_by")
   createdAt       DateTime @default(now()) @map("created_at")
   admin           User?    @relation("AdminReviews", fields: [reviewedBy], references: [id])
@@ -289,13 +295,19 @@ model SecurityEvent {
 }
 
 model AuditLog {
-  id        Int      @id @default(autoincrement())
-  vendorId  Int      @map("vendor_id")
-  action    String
-  details   String
-  createdAt DateTime @default(now()) @map("created_at")
+  id         Int      @id @default(autoincrement())
+  actorId    Int      @map("actor_id")
+  actorRole  String   @map("actor_role")
+  action     String
+  targetType String   @map("target_type")
+  targetId   Int      @map("target_id")
+  oldValue   String?  @map("old_value")
+  newValue   String?  @map("new_value")
+  ipAddress  String?  @map("ip_address")
+  userAgent  String?  @map("user_agent")
+  createdAt  DateTime @default(now()) @map("created_at")
 
-  @@index([vendorId])
+  @@index([actorId, action])
   @@map("audit_logs")
 }
 
