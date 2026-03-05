@@ -182,23 +182,9 @@ export const getCapacityRequests = async (req: Request, res: Response): Promise<
 export const updateServicePricing = async (req: Request, res: Response): Promise<void> => {
     try {
         const { vendorServiceId } = req.params;
-        const { pricePerHour, pricePerDay, pricePerWeek, pricePerMonth, currentPassword } = req.body;
         const vendorId = (req as any).user.id;
 
-        // [M-12] Bounds validation
-        const priceKeys = [pricePerHour, pricePerDay, pricePerWeek, pricePerMonth];
-        for (const price of priceKeys) {
-            if (price !== undefined && price !== null) {
-                if (typeof price !== 'number' || price < 0.01 || price > 10000) {
-                    res.status(422).json({ error: 'Prices must be between 0.01 and 10000' });
-                    return;
-                }
-            }
-        }
-
-        // Removed step-up auth check to prevent frontend 401 logouts during pricing updates
-
-        // [M-12] Verify branch ownership
+        // Load the service first to know its current state
         const vendorService = await prisma.vendorService.findUnique({
             where: { id: parseInt(vendorServiceId as string) },
             include: { branch: true }
@@ -214,9 +200,50 @@ export const updateServicePricing = async (req: Request, res: Response): Promise
             return;
         }
 
+        // Handle frontend's 'price' payload
+        let { pricePerHour, pricePerDay, pricePerWeek, pricePerMonth, price } = req.body;
+
+        if (price !== undefined && price !== null) {
+            // Frontend sent a generic 'price'. Let's figure out what they mean based on current service data.
+            // If the service currently has a pricePerHour, we update that. Else, pricePerDay.
+            if (vendorService.pricePerHour !== null) {
+                // If it was hourly before, update hourly
+                pricePerHour = price;
+            } else if (vendorService.pricePerDay !== null) {
+                pricePerDay = price;
+            } else {
+                // Fallback to hourly if it had neither
+                pricePerHour = price;
+            }
+        } else {
+            // Unchanged fields should retain current values if we're sending explicit fields
+            if (pricePerHour === undefined) pricePerHour = vendorService.pricePerHour;
+            if (pricePerDay === undefined) pricePerDay = vendorService.pricePerDay;
+            if (pricePerWeek === undefined) pricePerWeek = vendorService.pricePerWeek;
+            if (pricePerMonth === undefined) pricePerMonth = vendorService.pricePerMonth;
+        }
+
+        // [M-12] Bounds validation
+        const priceKeys = [pricePerHour, pricePerDay, pricePerWeek, pricePerMonth];
+        for (const p of priceKeys) {
+            if (p !== undefined && p !== null) {
+                if (typeof Number(p) !== 'number' || Number(p) < 0.01 || Number(p) > 10000) {
+                    res.status(422).json({ error: 'Prices must be between 0.01 and 10000' });
+                    return;
+                }
+            }
+        }
+
+        const dataToUpdate = {
+            pricePerHour: pricePerHour !== undefined ? Number(pricePerHour) : null,
+            pricePerDay: pricePerDay !== undefined ? Number(pricePerDay) : null,
+            pricePerWeek: pricePerWeek !== undefined ? Number(pricePerWeek) : null,
+            pricePerMonth: pricePerMonth !== undefined ? Number(pricePerMonth) : null
+        };
+
         const updated = await prisma.vendorService.update({
             where: { id: parseInt(vendorServiceId as string) },
-            data: { pricePerHour, pricePerDay, pricePerWeek, pricePerMonth }
+            data: dataToUpdate
         });
 
         // [M-14] Pricing audit trail
@@ -230,7 +257,7 @@ export const updateServicePricing = async (req: Request, res: Response): Promise
                     pricePerWeek: vendorService.pricePerWeek,
                     pricePerMonth: vendorService.pricePerMonth
                 }),
-                newPrice: JSON.stringify({ pricePerHour, pricePerDay, pricePerWeek, pricePerMonth }),
+                newPrice: JSON.stringify(dataToUpdate),
                 reason: 'Vendor updated pricing via dashboard',
                 approvedBy: vendorId
             }
