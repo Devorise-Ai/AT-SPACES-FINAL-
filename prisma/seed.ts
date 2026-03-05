@@ -74,7 +74,7 @@ async function main() {
         create: { name: 'Hot Desk' }
     });
 
-    // 4. Create a Branch in Amman
+    // 4. Create Branches in Amman
     const branchAmman = await prisma.branch.create({
         data: {
             vendorId: vendor.id,
@@ -103,6 +103,40 @@ async function main() {
                         serviceId: hotDeskService.id,
                         pricePerHour: 3.50,
                         capacity: 50,
+                    }
+                ]
+            }
+        }
+    });
+
+    const branchAmmanWest = await prisma.branch.create({
+        data: {
+            vendorId: vendor.id,
+            name: 'AT Spaces West',
+            location: 'AMMAN',
+            status: 'ACTIVE',
+            accessMapUrl: 'https://maps.example.com/amman-west',
+            facilities: {
+                create: [
+                    { facilityId: wifi.id, description: '500 Mbit/s fiber connection' }
+                ]
+            },
+            vendorServices: {
+                create: [
+                    {
+                        serviceId: meetingRoomService.id,
+                        pricePerHour: 12.00,
+                        capacity: 8,
+                        features: {
+                            create: [
+                                { featureId: projectors.id, quantity: 1 }
+                            ]
+                        }
+                    },
+                    {
+                        serviceId: hotDeskService.id,
+                        pricePerHour: 2.50,
+                        capacity: 30,
                     }
                 ]
             }

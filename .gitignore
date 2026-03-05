@@ -3,3 +3,8 @@ dist/
 .env
 .DS_Store
 *.log
+SSDLC/
+prisma/*.db
+.codex/
+.specify/
+credentials
