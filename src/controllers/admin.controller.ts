@@ -560,46 +560,66 @@ export const handleApprovalRequest = async (req: Request, res: Response): Promis
             try {
                 const payload = JSON.parse(request.payload);
 
-                if (request.type === 'CAPACITY_CHANGE' && payload.proposedCapacity && request.serviceId) {
-                    await prisma.vendorService.update({
-                        where: { id: request.serviceId },
-                        data: {
-                            capacity: payload.proposedCapacity,
-                            availableCapacity: payload.proposedCapacity
-                        }
-                    });
-                }
-
-                if (request.type === 'FEATURE_ADDITION' && payload.features && Array.isArray(payload.features) && request.serviceId) {
-                    for (const featureName of payload.features) {
-                        if (typeof featureName !== 'string' || !featureName.trim()) continue;
-
-                        // Find or create global feature
-                        let feature = await prisma.feature.findFirst({
-                            where: { name: featureName.trim() }
+                if (request.type === 'CAPACITY_CHANGE' && payload.proposedCapacity) {
+                    // Use vendorServiceId from payload, fallback to finding by branch+service
+                    let vsId = payload.vendorServiceId;
+                    if (!vsId && request.branchId && request.serviceId) {
+                        const vs = await prisma.vendorService.findFirst({
+                            where: { branchId: request.branchId, serviceId: request.serviceId }
                         });
-
-                        if (!feature) {
-                            feature = await prisma.feature.create({
-                                data: { name: featureName.trim() }
-                            });
-                        }
-
-                        // Link service feature
-                        await prisma.serviceFeature.upsert({
-                            where: {
-                                vendorServiceId_featureId: {
-                                    vendorServiceId: request.serviceId,
-                                    featureId: feature.id
-                                }
-                            },
-                            update: { quantity: 1 },
-                            create: {
-                                vendorServiceId: request.serviceId,
-                                featureId: feature.id,
-                                quantity: 1
+                        vsId = vs?.id;
+                    }
+                    if (vsId) {
+                        await prisma.vendorService.update({
+                            where: { id: vsId },
+                            data: {
+                                capacity: payload.proposedCapacity,
+                                availableCapacity: payload.proposedCapacity
                             }
                         });
+                    }
+                }
+
+                if (request.type === 'FEATURE_ADDITION' && payload.features && Array.isArray(payload.features)) {
+                    // Use vendorServiceId from payload, fallback to finding by branch+service
+                    let vsId = payload.vendorServiceId;
+                    if (!vsId && request.branchId && request.serviceId) {
+                        const vs = await prisma.vendorService.findFirst({
+                            where: { branchId: request.branchId, serviceId: request.serviceId }
+                        });
+                        vsId = vs?.id;
+                    }
+                    if (vsId) {
+                        for (const featureName of payload.features) {
+                            if (typeof featureName !== 'string' || !featureName.trim()) continue;
+
+                            // Find or create global feature
+                            let feature = await prisma.feature.findFirst({
+                                where: { name: featureName.trim() }
+                            });
+
+                            if (!feature) {
+                                feature = await prisma.feature.create({
+                                    data: { name: featureName.trim() }
+                                });
+                            }
+
+                            // Link service feature
+                            await prisma.serviceFeature.upsert({
+                                where: {
+                                    vendorServiceId_featureId: {
+                                        vendorServiceId: vsId,
+                                        featureId: feature.id
+                                    }
+                                },
+                                update: { quantity: 1 },
+                                create: {
+                                    vendorServiceId: vsId,
+                                    featureId: feature.id,
+                                    quantity: 1
+                                }
+                            });
+                        }
                     }
                 }
             } catch (parseErr) {

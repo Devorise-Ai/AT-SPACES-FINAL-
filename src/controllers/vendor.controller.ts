@@ -124,7 +124,7 @@ export const requestCapacityChange = async (req: Request, res: Response): Promis
         }
 
         // M-09: Payload integrity (HMAC hash)
-        const payloadData = JSON.stringify({ proposedCapacity, reason });
+        const payloadData = JSON.stringify({ proposedCapacity, reason, vendorServiceId: vendorServiceId || undefined });
         const payloadHash = crypto.createHmac('sha256', process.env.HMAC_SECRET || 'secret')
             .update(payloadData)
             .digest('hex');
@@ -376,7 +376,7 @@ export const updateServiceFeature = async (req: Request, res: Response): Promise
 
             // M-10: Queue abuse prevention/auto-expire
             const pendingRequest = await prisma.approvalRequest.findFirst({
-                where: { vendorId, serviceId: service.id, type: 'FEATURE_ADDITION', status: 'PENDING' }
+                where: { vendorId, serviceId: service.serviceId, type: 'FEATURE_ADDITION', status: 'PENDING' }
             });
 
             if (pendingRequest) {
@@ -385,7 +385,7 @@ export const updateServiceFeature = async (req: Request, res: Response): Promise
             }
 
             // M-09: Payload integrity (HMAC hash)
-            const payloadData = JSON.stringify({ features: featuresToAdd });
+            const payloadData = JSON.stringify({ features: featuresToAdd, vendorServiceId: service.id });
             const payloadHash = crypto.createHmac('sha256', process.env.HMAC_SECRET || 'secret')
                 .update(payloadData)
                 .digest('hex');
@@ -394,7 +394,7 @@ export const updateServiceFeature = async (req: Request, res: Response): Promise
                 data: {
                     vendorId,
                     branchId: service.branchId,
-                    serviceId: service.id,
+                    serviceId: service.serviceId,
                     type: 'FEATURE_ADDITION',
                     status: 'PENDING',
                     payload: payloadData,
