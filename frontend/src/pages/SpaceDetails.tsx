@@ -263,7 +263,19 @@ const SpaceDetails: React.FC = () => {
                                         <p>{fac.description}</p>
                                     </div>
                                 </div>
-                            )) : (
+                            )) : null}
+                            {branch.services && branch.services.flatMap(s => s.features || []).filter((f, i, arr) => arr.findIndex(x => x.name === f.name) === i).map((f, idx) => (
+                                <div key={`feat-${idx}`} className="amenity-item feature-item">
+                                    <div className="amenity-icon">
+                                        <CheckCircle size={20} />
+                                    </div>
+                                    <div className="amenity-info">
+                                        <h4>{f.name}</h4>
+                                        <p>Available in specific workspaces</p>
+                                    </div>
+                                </div>
+                            ))}
+                            {(!branch.facilities || branch.facilities.length === 0) && (!branch.services || branch.services.flatMap(s => s.features || []).length === 0) && (
                                 <p>Standard amenities included.</p>
                             )}
                         </div>
@@ -296,6 +308,15 @@ const SpaceDetails: React.FC = () => {
                                     </div>
                                     <div className="service-option-meta">
                                         <span className="service-capacity"><Users size={14} /> {service.capacity || '1-4'} People</span>
+                                        {service.features && service.features.length > 0 && (
+                                            <div className="service-features" style={{ marginTop: '8px', display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                                                {service.features.map((f, i) => (
+                                                    <span key={i} className="feature-badge" style={{ fontSize: '11px', background: 'rgba(255,255,255,0.15)', padding: '2px 8px', borderRadius: '12px' }}>
+                                                        {f.name}
+                                                    </span>
+                                                ))}
+                                            </div>
+                                        )}
                                     </div>
 
                                     {selectedService?.vendorServiceId === service.vendorServiceId && (

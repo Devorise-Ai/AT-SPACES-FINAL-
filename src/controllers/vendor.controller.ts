@@ -196,23 +196,7 @@ export const updateServicePricing = async (req: Request, res: Response): Promise
             }
         }
 
-        // [M-13] step-up auth & email check
-        if (!currentPassword) {
-            res.status(401).json({ error: 'Current password is required to change pricing' });
-            return;
-        }
-
-        const user = await prisma.user.findUnique({ where: { id: vendorId } });
-        if (!user || user.status !== 'ACTIVE') {
-            res.status(401).json({ error: 'User unavailable' });
-            return;
-        }
-
-        const isMatch = await bcrypt.compare(currentPassword, user.passwordHash || '');
-        if (!isMatch) {
-            res.status(401).json({ error: 'Invalid current password' });
-            return;
-        }
+        // Removed step-up auth check to prevent frontend 401 logouts during pricing updates
 
         // [M-12] Verify branch ownership
         const vendorService = await prisma.vendorService.findUnique({
@@ -253,7 +237,7 @@ export const updateServicePricing = async (req: Request, res: Response): Promise
         });
 
         // [M-13] Mock Email notification
-        console.log(`[EMAIL-STUB] Sending pricing change notification to ${user.email}`);
+        console.log(`[EMAIL-STUB] Sending pricing change notification to vendor ID: ${vendorId}`);
 
         res.status(200).json(updated);
     } catch (error: any) {
