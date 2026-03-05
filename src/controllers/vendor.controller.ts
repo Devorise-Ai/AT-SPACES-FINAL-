@@ -341,14 +341,7 @@ export const getServiceFeatures = async (req: Request, res: Response): Promise<v
 export const updateServiceFeature = async (req: Request, res: Response): Promise<void> => {
     try {
         const { id } = req.params;
-        const { featureId, quantity } = req.body;
         const vendorId = (req as any).user.id;
-
-        // [M-19] Validate quantity 1-999
-        if (typeof quantity !== 'number' || quantity < 1 || quantity > 999) {
-            res.status(422).json({ error: 'Quantity must be between 1 and 999' });
-            return;
-        }
 
         // [M-18] Enforce ownership
         const service = await prisma.vendorService.findUnique({
@@ -358,6 +351,52 @@ export const updateServiceFeature = async (req: Request, res: Response): Promise
 
         if (!service || service.branch.vendorId !== vendorId) {
             res.status(403).json({ error: 'Forbidden' });
+            return;
+        }
+
+        // Handle frontend array format {"features": ["Feature Name"]}
+        if (req.body.features && Array.isArray(req.body.features)) {
+            const addedFeatures = [];
+            for (const featureName of req.body.features) {
+                if (typeof featureName !== 'string' || !featureName.trim()) continue;
+
+                // Find or create global feature
+                let feature = await prisma.feature.findFirst({
+                    where: { name: featureName.trim() }
+                });
+
+                if (!feature) {
+                    feature = await prisma.feature.create({
+                        data: { name: featureName.trim() }
+                    });
+                }
+
+                // Link service feature
+                const serviceFeature = await prisma.serviceFeature.upsert({
+                    where: {
+                        vendorServiceId_featureId: {
+                            vendorServiceId: parseInt(id as string),
+                            featureId: feature.id
+                        }
+                    },
+                    update: { quantity: 1 },
+                    create: {
+                        vendorServiceId: parseInt(id as string),
+                        featureId: feature.id,
+                        quantity: 1
+                    }
+                });
+                addedFeatures.push(serviceFeature);
+            }
+            res.status(200).json(addedFeatures);
+            return;
+        }
+
+        const { featureId, quantity } = req.body;
+
+        // [M-19] Validate quantity 1-999
+        if (typeof quantity !== 'number' || quantity < 1 || quantity > 999) {
+            res.status(422).json({ error: 'Quantity must be between 1 and 999' });
             return;
         }
 
