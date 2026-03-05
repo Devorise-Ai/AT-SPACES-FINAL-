@@ -515,8 +515,8 @@ export const handleApprovalRequest = async (req: Request, res: Response): Promis
             return;
         }
 
-        if (decision === 'REJECTED' && (!rejectionReason || rejectionReason.trim().length < 10)) {
-            res.status(400).json({ error: 'Rejection reason must be at least 10 characters long when rejecting' });
+        if (decision === 'REJECTED' && (!rejectionReason || rejectionReason.trim().length < 1)) {
+            res.status(400).json({ error: 'Please provide a rejection reason' });
             return;
         }
 

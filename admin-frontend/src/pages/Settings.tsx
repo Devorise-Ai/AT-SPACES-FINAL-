@@ -36,7 +36,7 @@ const Settings: React.FC = () => {
         setSaving(true);
         setMessage(null);
         try {
-            await updateAdminProfile(profileForm);
+            await updateAdminProfile(profile.id, profileForm);
             setMessage({ type: 'success', text: 'Profile updated successfully!' });
         } catch (err: any) {
             setMessage({ type: 'error', text: err.response?.data?.error || 'Update failed.' });

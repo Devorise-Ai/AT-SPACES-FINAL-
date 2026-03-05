@@ -42,9 +42,10 @@ const Approvals: React.FC = () => {
             await reviewRequest(selected.id, decision, decision === 'REJECTED' ? rejectionReason : undefined);
             setSelected(null);
             fetchRequests();
-        } catch (e) {
+        } catch (e: any) {
             console.error(e);
-            alert('Failed to process request.');
+            const errMsg = e.response?.data?.error || 'Failed to process request.';
+            alert(errMsg);
         } finally {
             setProcessing(false);
         }

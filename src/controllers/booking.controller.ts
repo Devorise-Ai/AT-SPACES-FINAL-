@@ -5,18 +5,34 @@ import { createEvent, EventAttributes } from 'ics';
 export const getBookingCalendar = async (req: Request, res: Response): Promise<void> => {
     try {
         const { id } = req.params;
+        const userId = (req as any).user.id;
+        const role = (req as any).user.role;
+
         const booking = await prisma.booking.findUnique({
             where: { id: Number(id) },
             include: { branch: true, vendorService: { include: { service: true } } }
         });
 
-        if (!booking) {
+        // PT-CRIT-01 Mitigation: Strict Object-Level Authorization
+        if (!booking || (booking.customerId !== userId && role !== 'ADMIN')) {
+            if (booking && booking.customerId !== userId) {
+                // Audit cross-user access attempts
+                await prisma.auditLog.create({
+                    data: {
+                        actorId: userId,
+                        actorRole: role,
+                        action: 'UNAUTHORIZED_BOOKING_ACCESS_ATTEMPT',
+                        targetType: 'BOOKING',
+                        targetId: Number(id),
+                        newValue: JSON.stringify({ endpoint: 'calendar' })
+                    }
+                });
+            }
             res.status(404).json({ error: 'Booking not found' });
             return;
         }
 
         const start = new Date(booking.startTime);
-
         const event: EventAttributes = {
             start: [start.getFullYear(), start.getMonth() + 1, start.getDate(), start.getHours(), start.getMinutes()],
             duration: { hours: booking.duration },
@@ -43,13 +59,34 @@ export const getBookingCalendar = async (req: Request, res: Response): Promise<v
 export const getBookingMap = async (req: Request, res: Response): Promise<void> => {
     try {
         const { id } = req.params;
+        const userId = (req as any).user.id;
+        const role = (req as any).user.role;
+
         const booking = await prisma.booking.findUnique({
             where: { id: Number(id) },
             include: { branch: true }
         });
 
-        if (!booking || !booking.branch) {
-            res.status(404).json({ error: 'Booking or branch not found' });
+        // PT-CRIT-01 Mitigation: Strict Object-Level Authorization
+        if (!booking || (booking.customerId !== userId && role !== 'ADMIN')) {
+            if (booking && booking.customerId !== userId) {
+                await prisma.auditLog.create({
+                    data: {
+                        actorId: userId,
+                        actorRole: role,
+                        action: 'UNAUTHORIZED_BOOKING_ACCESS_ATTEMPT',
+                        targetType: 'BOOKING',
+                        targetId: Number(id),
+                        newValue: JSON.stringify({ endpoint: 'map' })
+                    }
+                });
+            }
+            res.status(404).json({ error: 'Booking not found' });
+            return;
+        }
+
+        if (!booking.branch) {
+            res.status(404).json({ error: 'Branch location not found' });
             return;
         }
 
@@ -62,17 +99,42 @@ export const getBookingMap = async (req: Request, res: Response): Promise<void> 
     }
 }
 
+const MAX_BOOKING_DURATION_HOURS = 48;
+
 export const checkAvailability = async (req: Request, res: Response): Promise<void> => {
     try {
         const { vendorServiceId, startTime, endTime, quantity } = req.body;
 
-        if (!vendorServiceId || !startTime || !endTime || !quantity) {
+        // PT-HIGH-01 Mitigation: Centralized Request Validation
+        if (!vendorServiceId || !startTime || !endTime || quantity === undefined) {
             res.status(400).json({ error: 'Missing required fields' });
+            return;
+        }
+
+        const parsedQuantity = parseInt(quantity as string);
+        if (isNaN(parsedQuantity) || parsedQuantity < 1 || parsedQuantity > 100) {
+            res.status(400).json({ error: 'Invalid quantity. Must be between 1 and 100.' });
             return;
         }
 
         const start = new Date(startTime);
         const end = new Date(endTime);
+
+        if (isNaN(start.getTime()) || isNaN(end.getTime())) {
+            res.status(400).json({ error: 'Invalid start or end time format.' });
+            return;
+        }
+
+        if (start >= end) {
+            res.status(400).json({ error: 'Start time must be before end time.' });
+            return;
+        }
+
+        const durationHours = (end.getTime() - start.getTime()) / 36e5;
+        if (durationHours > MAX_BOOKING_DURATION_HOURS) {
+            res.status(400).json({ error: `Duration cannot exceed ${MAX_BOOKING_DURATION_HOURS} hours.` });
+            return;
+        }
 
         const vendorService = await prisma.vendorService.findUnique({
             where: { id: parseInt(vendorServiceId) },
@@ -88,48 +150,53 @@ export const checkAvailability = async (req: Request, res: Response): Promise<vo
         let isAvailable = false;
 
         if (vendorService.service.name.includes('Hot Desk')) {
-            // Seat availability
             const overlappingBookings = await prisma.booking.aggregate({
                 where: {
                     vendorServiceId: parseInt(vendorServiceId),
                     bookingStatus: { in: ['UPCOMING', 'COMPLETED'] },
                     OR: [
-                        {
-                            startTime: { lt: end },
-                            bookingDate: { gt: start }
-                        }
+                        { startTime: { lt: end }, bookingDate: { gt: start } }, // Check for actual time overlap
+                        { startTime: { lt: end }, startTime: { gte: start } }
                     ]
                 },
                 _sum: { numPeople: true }
             });
             const bookedQuantity = overlappingBookings._sum.numPeople || 0;
-            isAvailable = (vendorService.capacity - bookedQuantity) >= parseInt(quantity);
-        } else if (vendorService.service.name.includes('Private Office')) {
-            // Office availability (1 booking per office at a time)
-            const existingBooking = await prisma.booking.findFirst({
+            isAvailable = (vendorService.capacity - bookedQuantity) >= parsedQuantity;
+        } else {
+            // Room/Office time slot check
+            const conflict = await prisma.booking.findFirst({
                 where: {
                     vendorServiceId: parseInt(vendorServiceId),
                     bookingStatus: { in: ['UPCOMING', 'COMPLETED'] },
                     startTime: { lt: end },
-                    bookingDate: { gt: start }
+                    OR: [
+                        { startTime: { lte: start }, duration: { gt: (start.getTime() - start.getTime()) / 36e5 } } // Simplify overlap
+                    ],
+                    // More precise overlap: start1 < end2 AND start2 < end1
+                    // where end = startTime + duration
                 }
             });
-            isAvailable = !existingBooking;
-        } else {
-            // Meeting Room time slot check
-            const conflictingMeeting = await prisma.booking.findFirst({
+
+            // Re-evaluating overlap logic for rooms
+            const existingBookings = await prisma.booking.findMany({
                 where: {
                     vendorServiceId: parseInt(vendorServiceId),
                     bookingStatus: { in: ['UPCOMING', 'COMPLETED'] },
-                    startTime: { lt: end }, // Overlap logic
-                    bookingDate: { gt: start }
                 }
             });
-            isAvailable = !conflictingMeeting;
+
+            const hasConflict = existingBookings.some(b => {
+                const bStart = new Date(b.startTime).getTime();
+                const bEnd = bStart + (b.duration * 36e5);
+                return start.getTime() < bEnd && end.getTime() > bStart;
+            });
+
+            isAvailable = !hasConflict;
         }
 
-        const durationHours = Math.abs(end.getTime() - start.getTime()) / 36e5;
-        const estimatedPrice = (Number(vendorService.pricePerHour) || 0) * durationHours * quantity;
+        // PT-HIGH-01 Mitigation: Server-side price safety
+        const estimatedPrice = Math.max(0, (Number(vendorService.pricePerHour) || 0) * durationHours * parsedQuantity);
 
         res.status(200).json({
             available: isAvailable,
@@ -181,8 +248,17 @@ export const createBooking = async (req: Request, res: Response): Promise<void> 
 
             const start = new Date(startTime);
             const end = new Date(endTime);
-            const durationHours = Math.abs(end.getTime() - start.getTime()) / 36e5;
-            const totalPrice = (Number(vendorService.pricePerHour) || 0) * durationHours * parseInt(quantity);
+
+            // PT-HIGH-01 Mitigation: Double-check validation in transaction
+            if (start >= end) throw new Error('Invalid time range');
+            const durationHours = (end.getTime() - start.getTime()) / 36e5;
+            if (durationHours > MAX_BOOKING_DURATION_HOURS) throw new Error('Exceeded maximum duration');
+
+            const parsedQuantity = parseInt(quantity as string);
+            if (isNaN(parsedQuantity) || parsedQuantity < 1) throw new Error('Invalid quantity');
+
+            // PT-HIGH-01 Mitigation: Server-side price calculation safety
+            const totalPrice = Math.max(0, (Number(vendorService.pricePerHour) || 0) * durationHours * parsedQuantity);
 
             const booking = await tx.booking.create({
                 data: {
@@ -193,7 +269,7 @@ export const createBooking = async (req: Request, res: Response): Promise<void> 
                     bookingDate: start,
                     startTime: start,
                     duration: Math.ceil(durationHours),
-                    numPeople: parseInt(quantity),
+                    numPeople: parsedQuantity,
                     totalPrice: totalPrice,
                     paymentMethod: paymentMethod,
                     paymentStatus: paymentMethod === 'CASH' ? 'PENDING' : 'SUCCESS',

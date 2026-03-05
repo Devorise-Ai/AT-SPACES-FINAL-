@@ -66,8 +66,8 @@ export const exportReport = (format: string, type?: string) =>
 export const getAdminProfile = () =>
     api.get('/admin/profile').then(r => r.data);
 
-export const updateAdminProfile = (data: { email?: string; phoneNumber?: string; ownerName?: string }) =>
-    api.put('/admin/profile', data).then(r => r.data);
+export const updateAdminProfile = (id: number, data: { email?: string; phoneNumber?: string; ownerName?: string }) =>
+    api.put(`/admin/profile/${id}`, data).then(r => r.data);
 
 export const updateAdminPassword = (data: { currentPassword: string; newPassword: string }) =>
     api.patch('/admin/profile/password', data).then(r => r.data);
