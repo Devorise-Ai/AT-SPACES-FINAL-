@@ -64,7 +64,10 @@ export const getVendorServices = async (req: Request, res: Response): Promise<vo
 export const requestCapacityChange = async (req: Request, res: Response): Promise<void> => {
     try {
         const vendorId = (req as any).user.id;
-        const { branchId, serviceId, proposedCapacity, reason } = req.body;
+        // Accept both frontend field names and legacy field names
+        const vendorServiceId = req.body.vendorServiceId;
+        const proposedCapacity = req.body.requestedCapacity ?? req.body.proposedCapacity;
+        const reason = req.body.reason;
 
         // M-08: Bounds checking
         if (typeof proposedCapacity !== 'number' || proposedCapacity < 1 || proposedCapacity > 10000) {
@@ -72,11 +75,32 @@ export const requestCapacityChange = async (req: Request, res: Response): Promis
             return;
         }
 
-        // M-08: Branch ownership checking
-        const branchCheck = await prisma.branch.findFirst({ where: { id: branchId, vendorId } });
-        if (!branchCheck) {
-            res.status(403).json({ error: 'You do not own this branch' });
-            return;
+        // Resolve branchId and serviceId from vendorServiceId
+        let branchId = req.body.branchId;
+        let serviceId = req.body.serviceId;
+
+        if (vendorServiceId && (!branchId || !serviceId)) {
+            const vendorService = await prisma.vendorService.findUnique({
+                where: { id: vendorServiceId },
+                include: { branch: true }
+            });
+            if (!vendorService) {
+                res.status(404).json({ error: 'Vendor service not found' });
+                return;
+            }
+            if (vendorService.branch.vendorId !== vendorId) {
+                res.status(403).json({ error: 'You do not own this service' });
+                return;
+            }
+            branchId = vendorService.branchId;
+            serviceId = vendorService.serviceId;
+        } else {
+            // M-08: Branch ownership checking (legacy path)
+            const branchCheck = await prisma.branch.findFirst({ where: { id: branchId, vendorId } });
+            if (!branchCheck) {
+                res.status(403).json({ error: 'You do not own this branch' });
+                return;
+            }
         }
 
         // M-10: Queue abuse prevention/auto-expire
@@ -121,9 +145,11 @@ export const requestCapacityChange = async (req: Request, res: Response): Promis
         // M-11: Capacity change non-repudiation (Audit Log)
         await prisma.auditLog.create({
             data: {
-                vendorId,
+                actorId: vendorId,
+                actorRole: 'VENDOR',
                 action: 'CAPACITY_REQUESTED',
-                details: `Requested capacity change for service ${serviceId} to ${proposedCapacity}`
+                targetType: 'VENDOR_SERVICE',
+                targetId: vendorServiceId || serviceId || 0
             }
         });
 
@@ -447,9 +473,11 @@ export const updateBookingStatus = async (req: Request, res: Response): Promise<
         if (status === 'NO_SHOW') {
             await prisma.auditLog.create({
                 data: {
-                    vendorId,
+                    actorId: vendorId,
+                    actorRole: 'VENDOR',
                     action: 'BOOKING_NO_SHOW',
-                    details: `Vendor marked booking ${booking.id} as NO_SHOW`
+                    targetType: 'BOOKING',
+                    targetId: booking.id
                 }
             });
         }
@@ -586,9 +614,11 @@ export const exportReport = async (req: Request, res: Response): Promise<void> =
 
         await prisma.auditLog.create({
             data: {
-                vendorId,
+                actorId: vendorId,
+                actorRole: 'VENDOR',
                 action: 'REPORT_EXPORTED',
-                details: `User exported report in ${format || 'csv'} format for period ${period || 'all'}`
+                targetType: 'REPORT',
+                targetId: vendorId
             }
         });
 
@@ -656,9 +686,11 @@ export const updateVendorProfile = async (req: Request, res: Response): Promise<
 
                 await prisma.auditLog.create({
                     data: {
-                        vendorId: userId,
+                        actorId: userId,
+                        actorRole: 'VENDOR',
                         action: 'EMAIL_CHANGE_REQUESTED',
-                        details: `Requested change to ${email}. Mock verification link generated.`
+                        targetType: 'USER',
+                        targetId: userId
                     }
                 });
 

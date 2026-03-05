@@ -93,7 +93,7 @@ const Login: React.FC = () => {
                         <div className="form-group">
                             <div className="label-row">
                                 <label>Password</label>
-                                <a href="#" className="forgot-link">Forgot password?</a>
+                                <Link to="/forgot-password" className="forgot-link">Forgot password?</Link>
                             </div>
                             <div className="input-with-icon">
                                 <Lock size={18} className="input-icon" />

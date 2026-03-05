@@ -576,9 +576,11 @@ export const handleApprovalRequest = async (req: Request, res: Response): Promis
         // Audit log
         await prisma.auditLog.create({
             data: {
-                vendorId: request.vendorId,
+                actorId: adminId,
+                actorRole: 'ADMIN',
                 action: `REQUEST_${decision}`,
-                details: `Admin ${adminId} ${decision.toLowerCase()} request #${request.id}${rejectionReason ? ': ' + rejectionReason : ''}`
+                targetType: 'APPROVAL_REQUEST',
+                targetId: request.id
             }
         });
 
