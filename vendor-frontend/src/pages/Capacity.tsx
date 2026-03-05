@@ -166,12 +166,17 @@ const Capacity: React.FC = () => {
         setModalLoading(true);
         try {
             await api.put(`/vendor/services/${modal.serviceId}/features`, { features: [featureText.trim()] });
-            showToast('Feature added successfully!');
+            showToast('Feature request submitted!');
             setModal({ type: null, serviceId: null });
             setFeatureText('');
+            // refresh requests
+            try {
+                const res = await api.get('/vendor/capacity-requests');
+                setRequests(res.data);
+            } catch { /* ignore */ }
         } catch (error) {
             console.error('Error adding feature:', error);
-            showToast('Failed to add feature.');
+            showToast('Failed to submit feature request.');
         } finally {
             setModalLoading(false);
         }

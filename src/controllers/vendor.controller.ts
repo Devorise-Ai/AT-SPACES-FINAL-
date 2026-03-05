@@ -356,39 +356,53 @@ export const updateServiceFeature = async (req: Request, res: Response): Promise
 
         // Handle frontend array format {"features": ["Feature Name"]}
         if (req.body.features && Array.isArray(req.body.features)) {
-            const addedFeatures = [];
-            for (const featureName of req.body.features) {
-                if (typeof featureName !== 'string' || !featureName.trim()) continue;
+            const featuresToAdd = req.body.features.filter((f: any) => typeof f === 'string' && f.trim().length > 0).map((f: string) => f.trim());
 
-                // Find or create global feature
-                let feature = await prisma.feature.findFirst({
-                    where: { name: featureName.trim() }
-                });
-
-                if (!feature) {
-                    feature = await prisma.feature.create({
-                        data: { name: featureName.trim() }
-                    });
-                }
-
-                // Link service feature
-                const serviceFeature = await prisma.serviceFeature.upsert({
-                    where: {
-                        vendorServiceId_featureId: {
-                            vendorServiceId: parseInt(id as string),
-                            featureId: feature.id
-                        }
-                    },
-                    update: { quantity: 1 },
-                    create: {
-                        vendorServiceId: parseInt(id as string),
-                        featureId: feature.id,
-                        quantity: 1
-                    }
-                });
-                addedFeatures.push(serviceFeature);
+            if (featuresToAdd.length === 0) {
+                res.status(400).json({ error: 'No valid features provided' });
+                return;
             }
-            res.status(200).json(addedFeatures);
+
+            // M-10: Queue abuse prevention/auto-expire
+            const pendingRequest = await prisma.approvalRequest.findFirst({
+                where: { vendorId, serviceId: service.id, type: 'FEATURE_ADDITION', status: 'PENDING' }
+            });
+
+            if (pendingRequest) {
+                res.status(429).json({ error: 'A pending feature addition request already exists for this service.' });
+                return;
+            }
+
+            // M-09: Payload integrity (HMAC hash)
+            const payloadData = JSON.stringify({ features: featuresToAdd });
+            const payloadHash = crypto.createHmac('sha256', process.env.HMAC_SECRET || 'secret')
+                .update(payloadData)
+                .digest('hex');
+
+            const approvalReq = await prisma.approvalRequest.create({
+                data: {
+                    vendorId,
+                    branchId: service.branchId,
+                    serviceId: service.id,
+                    type: 'FEATURE_ADDITION',
+                    status: 'PENDING',
+                    payload: payloadData,
+                    payloadHash,
+                    rejectionReason: `Request to add features: ${featuresToAdd.join(', ')}`
+                }
+            });
+
+            await prisma.auditLog.create({
+                data: {
+                    actorId: vendorId,
+                    actorRole: 'VENDOR',
+                    action: 'FEATURE_ADDITION_REQUESTED',
+                    targetType: 'VENDOR_SERVICE',
+                    targetId: service.id
+                }
+            });
+
+            res.status(201).json(approvalReq);
             return;
         }
 

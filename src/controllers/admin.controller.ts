@@ -555,11 +555,12 @@ export const handleApprovalRequest = async (req: Request, res: Response): Promis
             }
         });
 
-        // If approved AND it's a capacity change, apply the change
-        if (decision === 'APPROVED' && request.type === 'CAPACITY_CHANGE' && request.payload) {
+        // If approved AND it's a capacity change or feature addition, apply the change
+        if (decision === 'APPROVED' && request.payload) {
             try {
                 const payload = JSON.parse(request.payload);
-                if (payload.proposedCapacity && request.serviceId) {
+
+                if (request.type === 'CAPACITY_CHANGE' && payload.proposedCapacity && request.serviceId) {
                     await prisma.vendorService.update({
                         where: { id: request.serviceId },
                         data: {
@@ -567,6 +568,39 @@ export const handleApprovalRequest = async (req: Request, res: Response): Promis
                             availableCapacity: payload.proposedCapacity
                         }
                     });
+                }
+
+                if (request.type === 'FEATURE_ADDITION' && payload.features && Array.isArray(payload.features) && request.serviceId) {
+                    for (const featureName of payload.features) {
+                        if (typeof featureName !== 'string' || !featureName.trim()) continue;
+
+                        // Find or create global feature
+                        let feature = await prisma.feature.findFirst({
+                            where: { name: featureName.trim() }
+                        });
+
+                        if (!feature) {
+                            feature = await prisma.feature.create({
+                                data: { name: featureName.trim() }
+                            });
+                        }
+
+                        // Link service feature
+                        await prisma.serviceFeature.upsert({
+                            where: {
+                                vendorServiceId_featureId: {
+                                    vendorServiceId: request.serviceId,
+                                    featureId: feature.id
+                                }
+                            },
+                            update: { quantity: 1 },
+                            create: {
+                                vendorServiceId: request.serviceId,
+                                featureId: feature.id,
+                                quantity: 1
+                            }
+                        });
+                    }
                 }
             } catch (parseErr) {
                 console.error('Failed to parse approval payload:', parseErr);
