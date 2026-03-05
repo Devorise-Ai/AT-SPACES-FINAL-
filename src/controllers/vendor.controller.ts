@@ -52,8 +52,8 @@ export const getVendorServices = async (req: Request, res: Response): Promise<vo
     try {
         const vendorId = (req as any).user.id;
         const services = await prisma.vendorService.findMany({
-            where: { branch: { vendorId } },
-            include: { service: true }
+            where: { branch: { vendorId, status: 'ACTIVE' } },
+            include: { service: true, branch: { select: { status: true } } }
         });
         res.status(200).json(services);
     } catch (error: any) {
